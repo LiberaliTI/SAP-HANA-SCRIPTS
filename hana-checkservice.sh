@@ -23,6 +23,11 @@ SERVICES=(
 
 # Função para registrar mensagens no log
 log_message() {
+    # Garantir que o arquivo de log existe e tem as permissões corretas
+    if [ ! -f "$LOG_FILE" ]; then
+        touch "$LOG_FILE"
+        chmod 644 "$LOG_FILE"
+    fi
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
 }
 
@@ -69,12 +74,17 @@ setup_autostart() {
 [Unit]
 Description=SAP HANA and B1 Services Check and Start
 After=network.target
+Wants=network-online.target
 
 [Service]
 Type=simple
+User=root
+Group=root
 ExecStart=$SCRIPT_PATH
 Restart=no
 TimeoutSec=0
+StandardOutput=append:$LOG_FILE
+StandardError=append:$LOG_FILE
 
 [Install]
 WantedBy=multi-user.target
@@ -83,6 +93,7 @@ EOF
     # Recarregar systemd e habilitar o serviço
     systemctl daemon-reload
     systemctl enable hana-checkservice.service
+    systemctl start hana-checkservice.service
 }
 
 # Função para verificar se todos os serviços estão rodando
