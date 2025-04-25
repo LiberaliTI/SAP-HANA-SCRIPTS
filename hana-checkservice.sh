@@ -70,7 +70,7 @@ check_script_autostart() {
 
 # Função para configurar o script para iniciar automaticamente
 setup_autostart() {
-    log_message "Configurando inicialização automática do script..."
+    echo "Configurando inicialização automática do script..."
     
     # Remover serviço existente se houver
     if [ -f "/etc/systemd/system/$SERVICE_NAME" ]; then
@@ -106,10 +106,10 @@ EOF
     
     # Verificar se o serviço foi configurado corretamente
     if systemctl is-enabled "$SERVICE_NAME" > /dev/null 2>&1; then
-        log_message "Serviço $SERVICE_NAME configurado com sucesso."
+        echo "Serviço $SERVICE_NAME configurado com sucesso."
         return 0
     else
-        log_message "ERRO: Falha ao configurar o serviço $SERVICE_NAME."
+        echo "ERRO: Falha ao configurar o serviço $SERVICE_NAME."
         return 1
     fi
 }
@@ -181,8 +181,22 @@ start_hana() {
     return 1
 }
 
-# Função para executar a verificação e inicialização normal
-run_normal_operation() {
+# Função principal
+main() {
+    # Verificar se o serviço já está configurado
+    if ! check_script_autostart; then
+        if setup_autostart; then
+            echo "Configurado OK"
+            exit 0
+        else
+            echo "ERRO: Falha na configuração"
+            exit 1
+        fi
+    fi
+
+    # Se o serviço já estiver configurado, executar a verificação normal
+    log_message "Iniciando script de inicialização do SAP HANA e serviços SAP B1..."
+    
     # Verificar se tudo está rodando
     if check_all_services; then
         echo "Serviços e Base Ok"
@@ -221,21 +235,5 @@ run_normal_operation() {
     fi
 }
 
-# Função principal
-main() {
-    # Verificar se é a primeira execução
-    if [ "$1" == "--setup" ]; then
-        if setup_autostart; then
-            echo "Configurado OK"
-            exit 0
-        else
-            echo "ERRO: Falha na configuração"
-            exit 1
-        fi
-    else
-        run_normal_operation
-    fi
-}
-
 # Executar a função principal
-main "$@"
+main
