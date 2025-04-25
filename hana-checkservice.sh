@@ -72,6 +72,13 @@ check_script_autostart() {
 setup_autostart() {
     log_message "Configurando inicialização automática do script..."
     
+    # Remover serviço existente se houver
+    if [ -f "/etc/systemd/system/$SERVICE_NAME" ]; then
+        systemctl stop "$SERVICE_NAME" > /dev/null 2>&1
+        systemctl disable "$SERVICE_NAME" > /dev/null 2>&1
+        rm -f "/etc/systemd/system/$SERVICE_NAME"
+    fi
+    
     # Criar arquivo de serviço systemd
     cat > "/etc/systemd/system/$SERVICE_NAME" << EOF
 [Unit]
@@ -96,7 +103,6 @@ EOF
     # Recarregar systemd e habilitar o serviço
     systemctl daemon-reload
     systemctl enable "$SERVICE_NAME"
-    systemctl start "$SERVICE_NAME"
     
     # Verificar se o serviço foi configurado corretamente
     if systemctl is-enabled "$SERVICE_NAME" > /dev/null 2>&1; then
@@ -175,24 +181,8 @@ start_hana() {
     return 1
 }
 
-# Função principal
-main() {
-    # Verificar se é a primeira execução
-    if [ "$1" == "--setup" ]; then
-        if ! check_script_autostart; then
-            if setup_autostart; then
-                echo "Configurado OK"
-                exit 0
-            else
-                echo "ERRO: Falha na configuração"
-                exit 1
-            fi
-        else
-            echo "Já configurado"
-            exit 0
-        fi
-    fi
-
+# Função para executar a verificação e inicialização normal
+run_normal_operation() {
     # Verificar se tudo está rodando
     if check_all_services; then
         echo "Serviços e Base Ok"
@@ -228,6 +218,22 @@ main() {
     else
         log_message "ERRO: Não foi possível iniciar todos os serviços."
         exit 1
+    fi
+}
+
+# Função principal
+main() {
+    # Verificar se é a primeira execução
+    if [ "$1" == "--setup" ]; then
+        if setup_autostart; then
+            echo "Configurado OK"
+            exit 0
+        else
+            echo "ERRO: Falha na configuração"
+            exit 1
+        fi
+    else
+        run_normal_operation
     fi
 }
 
