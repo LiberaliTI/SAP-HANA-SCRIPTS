@@ -11,8 +11,9 @@ HANA_USER="hdbadm"
 HANA_INSTANCE="00"  # Número da instância SAP HANA
 MAX_RETRIES=20      # Número máximo de tentativas para verificar se o banco está online
 RETRY_INTERVAL=20   # Intervalo em segundos entre as verificações
-LOG_FILE="/opt/hana-checkservice.log"  # Arquivo de log
+LOG_FILE="/opt/SAP-HANA-SCRIPTS/hana-checkservice.log"  # Arquivo de log
 SCRIPT_PATH="/opt/SAP-HANA-SCRIPTS/hana-checkservice.sh"  # Caminho completo do script
+SERVICE_NAME="hana-checkservice.service"  # Nome do serviço systemd
 
 # Serviços que precisam ser verificados
 SERVICES=(
@@ -60,17 +61,19 @@ check_hana_status() {
 
 # Função para verificar se o script está configurado para iniciar automaticamente
 check_script_autostart() {
-    if [ ! -f "/etc/systemd/system/hana-checkservice.service" ]; then
+    if [ ! -f "/etc/systemd/system/$SERVICE_NAME" ]; then
         return 1
     fi
-    systemctl is-enabled hana-checkservice.service > /dev/null 2>&1
+    systemctl is-enabled "$SERVICE_NAME" > /dev/null 2>&1
     return $?
 }
 
 # Função para configurar o script para iniciar automaticamente
 setup_autostart() {
+    log_message "Configurando inicialização automática do script..."
+    
     # Criar arquivo de serviço systemd
-    cat > /etc/systemd/system/hana-checkservice.service << EOF
+    cat > "/etc/systemd/system/$SERVICE_NAME" << EOF
 [Unit]
 Description=SAP HANA and B1 Services Check and Start
 After=network.target
@@ -92,8 +95,17 @@ EOF
 
     # Recarregar systemd e habilitar o serviço
     systemctl daemon-reload
-    systemctl enable hana-checkservice.service
-    systemctl start hana-checkservice.service
+    systemctl enable "$SERVICE_NAME"
+    systemctl start "$SERVICE_NAME"
+    
+    # Verificar se o serviço foi configurado corretamente
+    if systemctl is-enabled "$SERVICE_NAME" > /dev/null 2>&1; then
+        log_message "Serviço $SERVICE_NAME configurado com sucesso."
+        return 0
+    else
+        log_message "ERRO: Falha ao configurar o serviço $SERVICE_NAME."
+        return 1
+    fi
 }
 
 # Função para verificar se todos os serviços estão rodando
@@ -168,9 +180,13 @@ main() {
     # Verificar se é a primeira execução
     if [ "$1" == "--setup" ]; then
         if ! check_script_autostart; then
-            setup_autostart
-            echo "Configurado OK"
-            exit 0
+            if setup_autostart; then
+                echo "Configurado OK"
+                exit 0
+            else
+                echo "ERRO: Falha na configuração"
+                exit 1
+            fi
         else
             echo "Já configurado"
             exit 0
